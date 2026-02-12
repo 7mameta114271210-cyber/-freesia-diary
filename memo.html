@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>フリージアの手帳</title>
+    <style>
+        body { background: #222; margin: 0; font-family: sans-serif; overflow: hidden; color: white; touch-action: pan-x; }
+        
+        /* 2D世界 */
+        #screen { width: 100vw; height: 100vh; overflow-x: auto; overflow-y: hidden; position: relative; z-index: 1; transition: filter 0.3s; }
+        #room-container { 
+            width: 300vw; 
+            height: 100vh; 
+            background: linear-gradient(to bottom, #8d6262 60%, #754d4d 60%); 
+            position: relative; 
+        }
+        
+        /* キャラクター代用（画像がない時用の色枠） */
+        .char-mini { position: absolute; bottom: 40%; height: 180px; width: 100px; z-index: 100; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 12px; text-align: center; border-radius: 10px; }
+        #player { background: #5a9; left: 100px; }
+        #freesia { background: #e91e63; left: 800px; }
+
+        /* 壁のToDoメモ */
+        #wall-todo {
+            position: absolute;
+            top: 15vh;
+            left: 250px;
+            width: 240px;
+            min-height: 320px;
+            background: #fdf5e6;
+            box-shadow: 2px 5px 15px rgba(0,0,0,0.2);
+            padding: 25px 20px;
+            color: #4b3621;
+            transform: rotate(-0.5deg);
+            z-index: 10;
+            box-sizing: border-box;
+        }
+        #todo-title { font-weight: bold; border-bottom: 2px solid #8d6262; margin-bottom: 10px; text-align: center; }
+        #todo-list { list-style: none; padding: 0; margin: 0; max-height: 200px; overflow-y: auto; }
+        .todo-item { border-bottom: 1px dashed rgba(141, 98, 98, 0.4); padding: 8px 0; display: flex; justify-content: space-between; }
+        #todo-input-area { margin-top: 15px; display: flex; gap: 5px; }
+        #todo-input { flex-grow: 1; border: none; border-bottom: 1px solid #8d6262; background: transparent; outline: none; }
+
+        /* 立ち絵エリア */
+        #stand-img-container { position: fixed; top: 0; left: 50%; transform: translateX(-50%); width: 100%; height: 100vh; display: none; justify-content: center; align-items: flex-end; z-index: 800; pointer-events: none; }
+        #freesia-stand-placeholder { width: 250px; height: 80vh; background: rgba(233, 30, 99, 0.3); border: 2px dashed #e91e63; opacity: 0; transition: 0.4s; display: flex; align-items: center; justify-content: center; }
+        .show-stand #freesia-stand-placeholder { opacity: 1; }
+
+        /* チャットウィンドウ */
+        #chat-window { position: fixed; bottom: 0; left: 0; width: 100%; height: 38vh; background: rgba(20, 15, 15, 0.95); border-top: 4px solid #8d6262; display: none; flex-direction: column; z-index: 1000; box-sizing: border-box; }
+        .dimmed #screen { filter: brightness(0.4); }
+        .close-btn { position: absolute; top: -35px; right: 15px; background: #8d6262; color: white; border: none; padding: 5px 15px; border-radius: 8px 8px 0 0; }
+        
+        .mode-container { display: none; flex-direction: column; padding: 20px; height: 100%; box-sizing: border-box; }
+        .menu-btn { background: #8d6262; color: white; border: 2px solid white; padding: 12px; margin: 5px; border-radius: 20px; width: 200px; align-self: center; }
+    </style>
+</head>
+<body>
+
+    <div id="stand-img-container">
+        <div id="freesia-stand-placeholder">（ここに立ち絵）</div>
+    </div>
+
+    <div id="chat-window">
+        <button class="close-btn" onclick="closeChat()">閉じる ▼</button>
+        
+        <div id="menu-mode" class="mode-container" style="display: flex;">
+            <div style="text-align:center; margin-bottom:15px;">フリージア「今日はどうしたんだい？」</div>
+            <button class="menu-btn" onclick="changeMode('talk')">メモをする</button>
+            <button class="menu-btn" onclick="changeMode('view')">メモを見る</button>
+        </div>
+
+        <div id="talk-mode" class="mode-container">
+            <div id="chat-log" style="flex-grow:1; overflow-y:auto; margin-bottom:10px;"></div>
+            <div style="display:flex; gap:10px;">
+                <input type="text" id="chat-input" style="flex-grow:1; background:#000; color:#fff; border:1px solid #5d3a3a; padding:10px;">
+                <button onclick="sendChat()" style="background:#8d6262; color:white; border:none; padding:0 20px;">送信</button>
+            </div>
+            <div onclick="changeMode('menu')" style="text-align:center; font-size:12px; margin-top:5px; cursor:pointer; text-decoration:underline;">メニューへ</div>
+        </div>
+
+        <div id="view-mode" class="mode-container">
+            <div style="border-bottom:1px solid #8d6262; margin-bottom:10px;">これまでのメモ</div>
+            <div id="memo-list-area" style="flex-grow:1; overflow-y:auto;"></div>
+            <div onclick="changeMode('menu')" style="text-align:center; margin-top:10px; cursor:pointer; text-decoration:underline;">戻る</div>
+        </div>
+    </div>
+
+    <div id="screen">
+        <div id="room-container">
+            <div id="wall-todo">
+                <div id="todo-title">📌 やること</div>
+                <ul id="todo-list"></ul>
+                <div id="todo-input-area">
+                    <input type="text" id="todo-input" placeholder="タスク...">
+                    <button onclick="addTodo()" style="background:#8d6262; color:white; border:none;">書く</button>
+                </div>
+            </div>
+            <div id="player">（あなた）</div>
+            <div id="freesia" onclick="openChat()">フリージア</div>
+        </div>
+    </div>
+
+    <script>
+        const chatWindow = document.getElementById('chat-window');
+        const chatLog = document.getElementById('chat-log');
+        const chatInput = document.getElementById('chat-input');
+        const standContainer = document.getElementById('stand-img-container');
+        const player = document.getElementById('player');
+        const screen = document.getElementById('screen');
+
+        let chatData = JSON.parse(localStorage.getItem('freesia_chat_test') || "[]");
+        let todos = JSON.parse(localStorage.getItem('freesia_todo_test') || "[]");
+
+        function openChat() {
+            document.body.classList.add('dimmed');
+            standContainer.style.display = 'flex';
+            setTimeout(() => document.body.classList.add('show-stand'), 10);
+            chatWindow.style.display = 'flex';
+            changeMode('menu');
+        }
+
+        function closeChat() {
+            document.body.classList.remove('dimmed', 'show-stand');
+            setTimeout(() => { standContainer.style.display = 'none'; }, 400);
+            chatWindow.style.display = 'none';
+        }
+
+        function changeMode(mode) {
+            document.querySelectorAll('.mode-container').forEach(m => m.style.display = 'none');
+            document.getElementById(mode + '-mode').style.display = 'flex';
+            if(mode === 'talk') renderChat();
+            if(mode === 'view') renderMemoList();
+        }
+
+        function renderChat() {
+            chatLog.innerHTML = chatData.map(m => `<div style="margin-bottom:8px; color:${m.role==='user'?'#ffeb3b':'#fff'}">${m.role==='user'?'':'🌸 '}${m.text}</div>`).join('');
+            chatLog.scrollTop = chatLog.scrollHeight;
+        }
+
+        function sendChat() {
+            const text = chatInput.value; if(!text) return;
+            chatData.push({ role: 'user', text: text });
+            chatInput.value = ""; renderChat();
+            setTimeout(() => {
+                chatData.push({ role: 'free', text: `「${text}」だね。覚えたよ。` });
+                localStorage.setItem('freesia_chat_test', JSON.stringify(chatData));
+                renderChat();
+            }, 500);
+        }
+
+        function renderMemoList() {
+            const listArea = document.getElementById('memo-list-area');
+            const userMemos = chatData.filter(m => m.role === 'user');
+            listArea.innerHTML = userMemos.map(m => `<div style="padding:5px 0; border-bottom:1px solid rgba(255,255,255,0.1)">・ ${m.text}</div>`).join('');
+        }
+
+        function addTodo() {
+            const input = document.getElementById('todo-input');
+            if(!input.value) return;
+            todos.push(input.value);
+            input.value = "";
+            saveTodos();
+        }
+        function deleteTodo(i) { todos.splice(i, 1); saveTodos(); }
+        function saveTodos() {
+            localStorage.setItem('freesia_todo_test', JSON.stringify(todos));
+            renderTodos();
+        }
+        function renderTodos() {
+            document.getElementById('todo-list').innerHTML = todos.map((t, i) => `
+                <li class="todo-item"><span>・ ${t}</span><span onclick="deleteTodo(${i})" style="color:#ccc;cursor:pointer;">×</span></li>
+            `).join('');
+        }
+
+        let lastScroll = 0;
+        screen.addEventListener('scroll', () => {
+            player.style.left = (screen.scrollLeft + 100) + 'px';
+        });
+
+        renderTodos();
+    </script>
+</body>
+</html>
