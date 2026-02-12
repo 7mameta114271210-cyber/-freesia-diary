@@ -1,185 +1,239 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>フリージアの手帳</title>
-    <style>
-        body { background: #222; margin: 0; font-family: sans-serif; overflow: hidden; color: white; touch-action: pan-x; }
-        
-        /* 2D世界 */
-        #screen { width: 100vw; height: 100vh; overflow-x: auto; overflow-y: hidden; position: relative; z-index: 1; transition: filter 0.3s; }
-        #room-container { 
-            width: 300vw; 
-            height: 100vh; 
-            background: linear-gradient(to bottom, #8d6262 60%, #754d4d 60%); 
-            position: relative; 
-        }
-        
-        /* キャラクター代用（画像がない時用の色枠） */
-        .char-mini { position: absolute; bottom: 40%; height: 180px; width: 100px; z-index: 100; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 12px; text-align: center; border-radius: 10px; }
-        #player { background: #5a9; left: 100px; }
-        #freesia { background: #e91e63; left: 800px; }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>フリージアのメモ帳</title>
+<style>
+    /* 全体の設定 */
+    body { margin: 0; padding: 0; font-family: sans-serif; background: #fce4ec; overflow: hidden; }
+    
+    /* 画面全体 */
+    #app { width: 100vw; height: 100vh; display: flex; flex-direction: column; position: relative; }
 
-        /* 壁のToDoメモ */
-        #wall-todo {
-            position: absolute;
-            top: 15vh;
-            left: 250px;
-            width: 240px;
-            min-height: 320px;
-            background: #fdf5e6;
-            box-shadow: 2px 5px 15px rgba(0,0,0,0.2);
-            padding: 25px 20px;
-            color: #4b3621;
-            transform: rotate(-0.5deg);
-            z-index: 10;
-            box-sizing: border-box;
-        }
-        #todo-title { font-weight: bold; border-bottom: 2px solid #8d6262; margin-bottom: 10px; text-align: center; }
-        #todo-list { list-style: none; padding: 0; margin: 0; max-height: 200px; overflow-y: auto; }
-        .todo-item { border-bottom: 1px dashed rgba(141, 98, 98, 0.4); padding: 8px 0; display: flex; justify-content: space-between; }
-        #todo-input-area { margin-top: 15px; display: flex; gap: 5px; }
-        #todo-input { flex-grow: 1; border: none; border-bottom: 1px solid #8d6262; background: transparent; outline: none; }
+    /* フリージアちゃんの立ち絵（右下に配置） */
+    #freesia-img {
+        position: absolute;
+        bottom: 60px; /* 入力欄とかぶらないように少し上 */
+        right: -20px;
+        height: 70vh; /* 画面の7割くらいの高さ */
+        z-index: 0;
+        pointer-events: none; /* タップは後ろに抜けるように */
+        opacity: 0.9;
+    }
 
-        /* 立ち絵エリア */
-        #stand-img-container { position: fixed; top: 0; left: 50%; transform: translateX(-50%); width: 100%; height: 100vh; display: none; justify-content: center; align-items: flex-end; z-index: 800; pointer-events: none; }
-        #freesia-stand-placeholder { width: 250px; height: 80vh; background: rgba(233, 30, 99, 0.3); border: 2px dashed #e91e63; opacity: 0; transition: 0.4s; display: flex; align-items: center; justify-content: center; }
-        .show-stand #freesia-stand-placeholder { opacity: 1; }
+    /* チャットが表示されるエリア */
+    #chat-area {
+        flex: 1;
+        overflow-y: auto;
+        padding: 20px;
+        padding-bottom: 80px; /* 下の入力欄の分あける */
+        z-index: 1;
+    }
 
-        /* チャットウィンドウ */
-        #chat-window { position: fixed; bottom: 0; left: 0; width: 100%; height: 38vh; background: rgba(20, 15, 15, 0.95); border-top: 4px solid #8d6262; display: none; flex-direction: column; z-index: 1000; box-sizing: border-box; }
-        .dimmed #screen { filter: brightness(0.4); }
-        .close-btn { position: absolute; top: -35px; right: 15px; background: #8d6262; color: white; border: none; padding: 5px 15px; border-radius: 8px 8px 0 0; }
-        
-        .mode-container { display: none; flex-direction: column; padding: 20px; height: 100%; box-sizing: border-box; }
-        .menu-btn { background: #8d6262; color: white; border: 2px solid white; padding: 12px; margin: 5px; border-radius: 20px; width: 200px; align-self: center; }
-    </style>
+    /* 吹き出しのデザイン */
+    .bubble {
+        max-width: 70%;
+        padding: 10px 15px;
+        margin: 10px 0;
+        border-radius: 15px;
+        font-size: 16px;
+        line-height: 1.4;
+        position: relative;
+        word-wrap: break-word;
+    }
+    /* 自分のメッセージ（右側） */
+    .bubble.me {
+        background: #81d4fa; /* 水色 */
+        color: #333;
+        align-self: flex-end;
+        margin-left: auto;
+        border-bottom-right-radius: 0;
+    }
+    /* フリージアちゃんの返事（左側） */
+    .bubble.freesia {
+        background: #fff;
+        color: #555;
+        align-self: flex-start;
+        border: 2px solid #f8bbd0;
+        border-bottom-left-radius: 0;
+    }
+
+    /* 入力エリア（画面下固定） */
+    #input-area {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        background: #fff;
+        padding: 10px;
+        box-sizing: border-box;
+        display: flex;
+        border-top: 1px solid #ccc;
+        z-index: 10;
+    }
+    #memo-input {
+        flex: 1;
+        padding: 10px;
+        border-radius: 20px;
+        border: 1px solid #ddd;
+        font-size: 16px;
+    }
+    #send-btn {
+        margin-left: 10px;
+        padding: 0 20px;
+        border-radius: 20px;
+        background: #f06292;
+        color: white;
+        border: none;
+        font-weight: bold;
+    }
+
+    /* メモリストを見るボタン（左上） */
+    #view-memo-btn {
+        position: fixed;
+        top: 15px;
+        left: 15px;
+        background: rgba(255,255,255,0.9);
+        padding: 8px 15px;
+        border-radius: 20px;
+        border: 2px solid #f06292;
+        color: #f06292;
+        font-weight: bold;
+        z-index: 20;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+
+    /* メモ一覧の画面（最初は隠れてる） */
+    #memo-list-overlay {
+        display: none; /* 最初は非表示 */
+        position: fixed;
+        top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(255,255,255,0.95);
+        z-index: 30;
+        padding: 60px 20px 20px 20px;
+        box-sizing: border-box;
+        overflow-y: auto;
+    }
+    .memo-item {
+        background: #fff;
+        padding: 15px;
+        margin-bottom: 10px;
+        border-radius: 10px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        border-left: 5px solid #f06292;
+        display: flex;
+        justify-content: space-between;
+    }
+    .close-btn {
+        position: absolute;
+        top: 15px;
+        right: 15px;
+        font-size: 24px;
+        background: none;
+        border: none;
+    }
+</style>
 </head>
 <body>
 
-    <div id="stand-img-container">
-        <div id="freesia-stand-placeholder">（ここに立ち絵）</div>
+<div id="app">
+    <img id="freesia-img" src="export202602121548229880.png" alt="Freesia">
+
+    <button id="view-memo-btn" onclick="toggleMemoList()">📖 メモ帳を見る</button>
+
+    <div id="chat-area" id="chat-container">
+        <div class="bubble freesia">
+            今日は何があったの？<br>私が覚えておくね。
+        </div>
     </div>
 
-    <div id="chat-window">
-        <button class="close-btn" onclick="closeChat()">閉じる ▼</button>
+    <div id="input-area">
+        <input type="text" id="memo-input" placeholder="メッセージを入力...">
+        <button id="send-btn" onclick="sendMessage()">送信</button>
+    </div>
+</div>
+
+<div id="memo-list-overlay">
+    <button class="close-btn" onclick="toggleMemoList()">✕ 閉じる</button>
+    <h3>📝 大切なメモ</h3>
+    <div id="saved-memos"></div>
+</div>
+
+<script>
+    // メモを保存する場所（スマホの中に保存されるよ！）
+    function sendMessage() {
+        const input = document.getElementById('memo-input');
+        const text = input.value;
+        if(text.trim() === "") return;
+
+        // 1. 自分の吹き出しを出す
+        addBubble(text, 'me');
+
+        // 2. スマホに保存する
+        saveToStorage(text);
+
+        // 3. フリージアちゃんの返事（0.5秒後に）
+        setTimeout(() => {
+            const replies = ["うん、わかった！", "メモしたよ。", "それは大切だね。", "お疲れ様！"];
+            const randomReply = replies[Math.floor(Math.random() * replies.length)];
+            addBubble(randomReply, 'freesia');
+            updateMemoList(); // リストも更新
+        }, 500);
+
+        input.value = ""; // 入力欄を空にする
+        // 下までスクロール
+        const chatArea = document.getElementById('chat-area');
+        chatArea.scrollTop = chatArea.scrollHeight;
+    }
+
+    // 吹き出しを作る魔法
+    function addBubble(text, type) {
+        const chatArea = document.getElementById('chat-area');
+        const bubble = document.createElement('div');
+        bubble.className = `bubble ${type}`;
+        bubble.innerText = text;
+        chatArea.appendChild(bubble);
+        chatArea.scrollTop = chatArea.scrollHeight;
+    }
+
+    // スマホに保存する魔法
+    function saveToStorage(text) {
+        let memos = JSON.parse(localStorage.getItem('freesiaMemos')) || [];
+        const now = new Date();
+        const timeString = `${now.getMonth()+1}/${now.getDate()} ${now.getHours()}:${now.getMinutes()}`;
+        memos.push({ text: text, time: timeString });
+        localStorage.setItem('freesiaMemos', JSON.stringify(memos));
+    }
+
+    // メモリストを表示/非表示する魔法
+    function toggleMemoList() {
+        const overlay = document.getElementById('memo-list-overlay');
+        if (overlay.style.display === 'block') {
+            overlay.style.display = 'none';
+        } else {
+            updateMemoList();
+            overlay.style.display = 'block';
+        }
+    }
+
+    // 保存されたメモをリストにする魔法
+    function updateMemoList() {
+        const listContainer = document.getElementById('saved-memos');
+        const memos = JSON.parse(localStorage.getItem('freesiaMemos')) || [];
+        listContainer.innerHTML = ""; // 一回クリア
         
-        <div id="menu-mode" class="mode-container" style="display: flex;">
-            <div style="text-align:center; margin-bottom:15px;">フリージア「今日はどうしたんだい？」</div>
-            <button class="menu-btn" onclick="changeMode('talk')">メモをする</button>
-            <button class="menu-btn" onclick="changeMode('view')">メモを見る</button>
-        </div>
-
-        <div id="talk-mode" class="mode-container">
-            <div id="chat-log" style="flex-grow:1; overflow-y:auto; margin-bottom:10px;"></div>
-            <div style="display:flex; gap:10px;">
-                <input type="text" id="chat-input" style="flex-grow:1; background:#000; color:#fff; border:1px solid #5d3a3a; padding:10px;">
-                <button onclick="sendChat()" style="background:#8d6262; color:white; border:none; padding:0 20px;">送信</button>
-            </div>
-            <div onclick="changeMode('menu')" style="text-align:center; font-size:12px; margin-top:5px; cursor:pointer; text-decoration:underline;">メニューへ</div>
-        </div>
-
-        <div id="view-mode" class="mode-container">
-            <div style="border-bottom:1px solid #8d6262; margin-bottom:10px;">これまでのメモ</div>
-            <div id="memo-list-area" style="flex-grow:1; overflow-y:auto;"></div>
-            <div onclick="changeMode('menu')" style="text-align:center; margin-top:10px; cursor:pointer; text-decoration:underline;">戻る</div>
-        </div>
-    </div>
-
-    <div id="screen">
-        <div id="room-container">
-            <div id="wall-todo">
-                <div id="todo-title">📌 やること</div>
-                <ul id="todo-list"></ul>
-                <div id="todo-input-area">
-                    <input type="text" id="todo-input" placeholder="タスク...">
-                    <button onclick="addTodo()" style="background:#8d6262; color:white; border:none;">書く</button>
-                </div>
-            </div>
-            <div id="player">（あなた）</div>
-            <div id="freesia" onclick="openChat()">フリージア</div>
-        </div>
-    </div>
-
-    <script>
-        const chatWindow = document.getElementById('chat-window');
-        const chatLog = document.getElementById('chat-log');
-        const chatInput = document.getElementById('chat-input');
-        const standContainer = document.getElementById('stand-img-container');
-        const player = document.getElementById('player');
-        const screen = document.getElementById('screen');
-
-        let chatData = JSON.parse(localStorage.getItem('freesia_chat_test') || "[]");
-        let todos = JSON.parse(localStorage.getItem('freesia_todo_test') || "[]");
-
-        function openChat() {
-            document.body.classList.add('dimmed');
-            standContainer.style.display = 'flex';
-            setTimeout(() => document.body.classList.add('show-stand'), 10);
-            chatWindow.style.display = 'flex';
-            changeMode('menu');
-        }
-
-        function closeChat() {
-            document.body.classList.remove('dimmed', 'show-stand');
-            setTimeout(() => { standContainer.style.display = 'none'; }, 400);
-            chatWindow.style.display = 'none';
-        }
-
-        function changeMode(mode) {
-            document.querySelectorAll('.mode-container').forEach(m => m.style.display = 'none');
-            document.getElementById(mode + '-mode').style.display = 'flex';
-            if(mode === 'talk') renderChat();
-            if(mode === 'view') renderMemoList();
-        }
-
-        function renderChat() {
-            chatLog.innerHTML = chatData.map(m => `<div style="margin-bottom:8px; color:${m.role==='user'?'#ffeb3b':'#fff'}">${m.role==='user'?'':'🌸 '}${m.text}</div>`).join('');
-            chatLog.scrollTop = chatLog.scrollHeight;
-        }
-
-        function sendChat() {
-            const text = chatInput.value; if(!text) return;
-            chatData.push({ role: 'user', text: text });
-            chatInput.value = ""; renderChat();
-            setTimeout(() => {
-                chatData.push({ role: 'free', text: `「${text}」だね。覚えたよ。` });
-                localStorage.setItem('freesia_chat_test', JSON.stringify(chatData));
-                renderChat();
-            }, 500);
-        }
-
-        function renderMemoList() {
-            const listArea = document.getElementById('memo-list-area');
-            const userMemos = chatData.filter(m => m.role === 'user');
-            listArea.innerHTML = userMemos.map(m => `<div style="padding:5px 0; border-bottom:1px solid rgba(255,255,255,0.1)">・ ${m.text}</div>`).join('');
-        }
-
-        function addTodo() {
-            const input = document.getElementById('todo-input');
-            if(!input.value) return;
-            todos.push(input.value);
-            input.value = "";
-            saveTodos();
-        }
-        function deleteTodo(i) { todos.splice(i, 1); saveTodos(); }
-        function saveTodos() {
-            localStorage.setItem('freesia_todo_test', JSON.stringify(todos));
-            renderTodos();
-        }
-        function renderTodos() {
-            document.getElementById('todo-list').innerHTML = todos.map((t, i) => `
-                <li class="todo-item"><span>・ ${t}</span><span onclick="deleteTodo(${i})" style="color:#ccc;cursor:pointer;">×</span></li>
-            `).join('');
-        }
-
-        let lastScroll = 0;
-        screen.addEventListener('scroll', () => {
-            player.style.left = (screen.scrollLeft + 100) + 'px';
+        memos.reverse().forEach((memo, index) => { // 新しい順に表示
+            const div = document.createElement('div');
+            div.className = 'memo-item';
+            div.innerHTML = `
+                <span>${memo.text}</span>
+                <span style="font-size:12px; color:#888;">${memo.time}</span>
+            `;
+            listContainer.appendChild(div);
         });
+    }
+</script>
 
-        renderTodos();
-    </script>
 </body>
 </html>
